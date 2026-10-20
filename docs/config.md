@@ -163,11 +163,16 @@ Picker shortcuts, appearance, sorting, and history are documented in
 | `source_order` | Default order: `herdr`, `config`, `zoxide`, `dir`. Reorder these sources; unknown or duplicate names are rejected and omitted sources are appended. |
 | `blacklist` | Default `[]`. Treats each value as a regular expression matched against workspace names. Normal listings hide matches; `list --blacklisted` shows them. Invalid regexes are rejected. |
 
+Deduplication keeps the first entry for each directory path in source order.
+Different paths remain available even when their names match. Entries without
+a path are deduplicated by name. Zoxide blacklist matching uses the original
+basename, before display labels expand.
+
 ### `[naming]`
 
 | Field | Runtime effect |
 | --- | --- |
-| `path_components` | Sets the number of path components used by the directory-name fallback for a newly created direct-path workspace. Git repositories keep their repository-derived name. Must be at least `1` (the default). |
+| `path_components` | Sets the minimum number of trailing path components used for zoxide labels, which expand further when needed to distinguish directories. Also controls the directory-name fallback for a newly created direct-path workspace; Git repositories keep their repository-derived name. Must be at least `1` (the default). |
 
 ### `[history]`
 

@@ -385,7 +385,7 @@ name = "api"
 path = "/configured/api"
 `), 0600))
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", filepath.Join(d, "state"))
-	zoxideOutput := "42 /discovered/api\n"
+	zoxideOutput := "42 /configured/api\n"
 
 	require.Len(t, runListJSON(t, cfgPath, zoxideOutput), 1)
 	require.Len(t, runListJSON(t, cfgPath, zoxideOutput, "--hide-duplicates=false"), 2)
@@ -1859,6 +1859,29 @@ printf '%s\n' "$*" >> "$HERDR_FAKE_LOG"
 	log, err := os.ReadFile(logPath)
 	require.NoError(t, err)
 	assert.Equal(t, "plugin pane open --plugin fullerzz.sesh --entrypoint picker --placement overlay", strings.TrimSpace(string(log)))
+}
+
+func TestPickerDistinguishesZoxideDirectories(t *testing.T) {
+	for _, components := range []int{1, 2, 4} {
+		t.Run(fmt.Sprint(components), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "herdr-sesh.toml")
+			require.NoError(t, os.WriteFile(path, fmt.Appendf(nil, "version = 1\n[naming]\npath_components = %d\n", components), 0600))
+			got := runPickerJSON(t, path, "100 /projects/project-a/worktrees/main\n10 /projects/project-b/worktrees/main\n1 /projects/unique\n")
+			require.Len(t, got, 3)
+			prefix := ""
+			if components == 4 {
+				prefix = "projects/"
+			}
+			assert.Equal(t, prefix+"project-a/worktrees/main", got[0].Name)
+			assert.Equal(t, prefix+"project-b/worktrees/main", got[1].Name)
+			assert.Equal(t, "/projects/project-b/worktrees/main", got[1].Path)
+			wantUnique := "unique"
+			if components > 1 {
+				wantUnique = "projects/unique"
+			}
+			assert.Equal(t, wantUnique, got[2].Name)
+		})
+	}
 }
 
 func runPickerJSON(t *testing.T, cfgPath, zoxideOutput string) []model.Session {

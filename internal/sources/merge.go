@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"path/filepath"
 	"regexp"
 	"sync"
 
@@ -41,7 +42,7 @@ func Merge(ctx context.Context, srcs []Source, order []string, blacklist []strin
 		}
 	}
 	out := model.NewSessions()
-	seenName := map[string]bool{}
+	seen := map[string]bool{}
 	bl := compile(blacklist)
 	for _, name := range ordered {
 		ss := by[name]
@@ -53,14 +54,14 @@ func Merge(ctx context.Context, srcs []Source, order []string, blacklist []strin
 				}
 			}
 			if dedupe {
-				key := sess.Name
-				if key == "" {
-					key = sess.Path
+				key := "name:" + sess.Name
+				if sess.Path != "" {
+					key = "path:" + filepath.Clean(sess.Path)
 				}
-				if seenName[key] {
+				if seen[key] {
 					continue
 				}
-				seenName[key] = true
+				seen[key] = true
 			}
 			out.Add(sess)
 		}

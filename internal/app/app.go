@@ -144,7 +144,9 @@ func (a *App) collectFrom(ctx context.Context, cfg config.Config, target string,
 		return nil, err
 	}
 	sources.ApplyConfig(&merged, cfg, "")
-	return merged.Ordered(), nil
+	sessions := merged.Ordered()
+	sources.NameZoxide(sessions, cfg.DirLength)
+	return sessions, nil
 }
 
 type ignoreSource struct{ sources.Source }
@@ -205,6 +207,7 @@ func (a *App) list(ctx context.Context, args []string) error {
 	}
 	sources.ApplyConfig(&ss, cfg, "")
 	sessions := ss.Ordered()
+	sources.NameZoxide(sessions, cfg.DirLength)
 	if cacheable {
 		if err := state.SaveSessionCache(os.Getenv("HERDR_PLUGIN_STATE_DIR"), resolvedConfigPath, sessions, time.Now()); err != nil {
 			a.warnf("could not save session cache: %v", err)
