@@ -1763,6 +1763,37 @@ func TestListViewHighlightsCaseInsensitiveQueryMatches(t *testing.T) {
 	assert.Equal(t, 2, strings.Count(got, want))
 }
 
+func TestListViewHighlightsFuzzyFragments(t *testing.T) {
+	m := newTeaModel([]model.Session{{Name: "workspace launchpad"}}, Options{})
+	m.list.Filter("worklaun")
+	got := m.listView(80, 1)
+	assert.Contains(t, got, matchStyle.Render("work"))
+	assert.Contains(t, got, matchStyle.Render("laun"))
+}
+
+func TestListViewHighlightsWorktreeFragmentFromParentSearch(t *testing.T) {
+	m := newTeaModel([]model.Session{{
+		Name:     "main",
+		Worktree: model.WorktreeRelation{Linked: true, ParentWorkspaceName: "🚀 launchpad"},
+	}}, Options{})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l', Text: "lamain"})
+	m = updated.(teaModel)
+	got := m.listView(80, 1)
+	assert.Contains(t, got, matchStyle.Render("main"))
+	updated, command := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(teaModel)
+	require.NotNil(t, command)
+	assert.True(t, m.chosen)
+	assert.Equal(t, "main", m.choice.Name)
+}
+
+func TestListViewHighlightsSeparatorAwareFuzzyMatch(t *testing.T) {
+	m := newTeaModel([]model.Session{{Name: "api-service"}}, Options{DisplayOptions: DisplayOptions{SeparatorAware: true}})
+	m.list.Filter("api/serv")
+	got := m.listView(80, 1)
+	assert.Contains(t, got, matchStyle.Render("api-serv"))
+}
+
 func TestListViewPreservesUnicodeWhenHighlightingFoldedMatch(t *testing.T) {
 	m := newTeaModel([]model.Session{{Name: "workspace-Ⱥ", Path: "/tmp/workspace-Ⱥ"}}, Options{})
 	m.list.Filter("ⱥ")

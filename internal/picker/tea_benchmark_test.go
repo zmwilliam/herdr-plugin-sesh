@@ -25,7 +25,9 @@ func BenchmarkFilterSessions(b *testing.B) {
 		{name: "Sessions100/MatchNone", count: 100, query: "missing", want: 0},
 		{name: "Sessions100/MatchSome", count: 100, query: "service-00", want: 100},
 		{name: "Sessions1000/MatchNone", count: 1000, query: "missing", want: 0},
-		{name: "Sessions1000/MatchSome", count: 1000, query: "service-00", want: 100},
+		// Fuzzy matching also finds the second zero later in the number:
+		// all 0000–0999 entries except those with three nonzero trailing digits.
+		{name: "Sessions1000/MatchSome", count: 1000, query: "service-00", want: 271},
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {

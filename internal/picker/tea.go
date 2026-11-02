@@ -1001,7 +1001,7 @@ func (m teaModel) listView(width, visibleRows int) string {
 			selected := m.listFocused && !m.focusSmearActive && i == m.list.Selected
 			selectedRail := m.smear.headStyle().Render(m.smear.headGlyph + " ")
 			treePrefix := worktreeTreePrefix(m.list.Filtered, i)
-			line := strings.TrimSuffix(rowWithRail(m.list.Filtered[i], selected, width, m.showIcons, m.replaceWorktreeIcon, m.hidePath, m.list.Query, selectedRail, m.agentSpinner.View(), treePrefix), "\n")
+			line := strings.TrimSuffix(rowWithRail(m.list.Filtered[i], selected, width, m.showIcons, m.replaceWorktreeIcon, m.hidePath, m.list.SeparatorAware, m.list.Query, selectedRail, m.agentSpinner.View(), treePrefix), "\n")
 			if rail, age := m.smearRail(i); rail != "" {
 				line = m.smear.trailStyle(age).Render(rail+" ") + strings.TrimPrefix(line, "  ")
 			}
@@ -1522,10 +1522,10 @@ func fixedVisualLines(text string, width, count int) string {
 }
 
 func row(s sessionmodel.Session, selected bool, width int, showIcons bool, query string) string {
-	return rowWithRail(s, selected, width, showIcons, true, false, query, selectionRailStyle.Render("┃ "), agentStatusSpinner.Frames[0], "")
+	return rowWithRail(s, selected, width, showIcons, true, false, false, query, selectionRailStyle.Render("┃ "), agentStatusSpinner.Frames[0], "")
 }
 
-func rowWithRail(s sessionmodel.Session, selected bool, width int, showIcons, replaceWorktreeIcon, hidePath bool, query, selectedRail, workingGlyph, treePrefix string) string {
+func rowWithRail(s sessionmodel.Session, selected bool, width int, showIcons, replaceWorktreeIcon, hidePath, separatorAware bool, query, selectedRail, workingGlyph, treePrefix string) string {
 	rail := "  "
 	if selected {
 		rail = selectedRail
@@ -1577,9 +1577,14 @@ func rowWithRail(s sessionmodel.Session, selected bool, width int, showIcons, re
 	}
 	tree := worktreeMarkerStyle.Render(treePrefix)
 	labelWidth := maxInt(1, nameWidth-lipgloss.Width(tree))
-	line := rail + status + badge + tree + highlightMatches(label, query, labelWidth, labelStyle)
+	_, labelPositions := matchName(s, query, separatorAware, true)
+	if s.Name == "" {
+		_, labelPositions = fuzzyMatch(label, query, separatorAware, true)
+	}
+	line := rail + status + badge + tree + highlightMatches(label, labelPositions, labelWidth, labelStyle)
 	if showSecondary {
-		line += "  " + highlightMatches(path, query, secondaryWidth, pathStyle)
+		_, pathPositions := fuzzyMatch(path, query, separatorAware, true)
+		line += "  " + highlightMatches(path, pathPositions, secondaryWidth, pathStyle)
 	}
 	return fitLine(line, width) + "\n"
 }
@@ -1632,29 +1637,32 @@ func worktreeDescription(s sessionmodel.Session) string {
 	return "linked worktree"
 }
 
-func highlightMatches(text, query string, width int, baseStyle lipgloss.Style) string {
-	text = fitPlain(text, width)
-	if query == "" {
-		return baseStyle.Render(text)
+func highlightMatches(text string, positions []int, width int, baseStyle lipgloss.Style) string {
+	if len(positions) == 0 {
+		return baseStyle.Render(fitPlain(text, width))
 	}
 
 	textRunes := []rune(text)
-	queryRunes := []rune(query)
-	var rendered strings.Builder
-	plainStart := 0
-	for index := 0; index+len(queryRunes) <= len(textRunes); {
-		matchEnd := index + len(queryRunes)
-		if !strings.EqualFold(string(textRunes[index:matchEnd]), query) {
-			index++
-			continue
+	matched := make([]bool, len(textRunes))
+	for _, position := range positions {
+		if position >= 0 && position < len(matched) {
+			matched[position] = true
 		}
-		rendered.WriteString(baseStyle.Render(string(textRunes[plainStart:index])))
-		rendered.WriteString(matchStyle.Render(string(textRunes[index:matchEnd])))
-		index = matchEnd
-		plainStart = matchEnd
 	}
-	rendered.WriteString(baseStyle.Render(string(textRunes[plainStart:])))
-	return rendered.String()
+	var rendered strings.Builder
+	for start := 0; start < len(textRunes); {
+		end := start + 1
+		for end < len(textRunes) && matched[end] == matched[start] {
+			end++
+		}
+		style := baseStyle
+		if matched[start] {
+			style = matchStyle
+		}
+		rendered.WriteString(style.Render(string(textRunes[start:end])))
+		start = end
+	}
+	return fitLine(rendered.String(), width)
 }
 
 func sourceBadge(source string, showIcons bool) string {

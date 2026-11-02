@@ -23,7 +23,8 @@ tabs.
 ## Features
 
 - Search active Herdr workspaces, Sesh-style TOML sessions, and zoxide history
-  from a native terminal picker, with name matches ahead of path-only matches
+  from a native terminal picker, with fuzzy search across names, parent workspaces,
+  and paths, and name matches ahead of path-only matches
   and configurable home-directory priority.
 - Match the native picker to Herdr's active theme by default, with a
   configuration toggle to retain the picker's built-in colors.

@@ -3,6 +3,7 @@ package picker
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/fullerzz/herdr-plugin-sesh/internal/model"
@@ -27,32 +28,50 @@ func (m *Model) Filter(q string) {
 	queryChanged := q != m.Query
 	m.Query = q
 	m.Filtered = m.Filtered[:0]
-	var homeMatches []model.Session
-	var pathMatches []model.Session
+	type rankedSession struct {
+		session model.Session
+		group   int
+		score   int
+		exact   bool
+	}
+	matches := make([]rankedSession, 0, len(m.All))
 	homeQuery := strings.EqualFold(q, "home")
 	for _, s := range m.All {
-		nameMatch := Match(s.Name, q, m.SeparatorAware)
-		pathMatch := Match(s.Path, q, m.SeparatorAware) || homeQuery && isHomePath(s.Path)
-		if !nameMatch && !pathMatch {
+		if q == "" {
+			m.Filtered = append(m.Filtered, s)
 			continue
 		}
+		name, _ := matchName(s, q, m.SeparatorAware, false)
 		if homeQuery && isHomePath(s.Path) {
 			if !m.DisableHomePrioritization {
-				homeMatches = append(homeMatches, s)
+				matches = append(matches, rankedSession{session: s})
 			} else {
-				pathMatches = append(pathMatches, s)
+				path, _ := fuzzyMatch(s.Path, q, m.SeparatorAware, false)
+				matches = append(matches, rankedSession{session: s, group: 2, score: path.Score})
 			}
 			continue
 		}
-		if nameMatch {
-			m.Filtered = append(m.Filtered, s)
+		if name.Start >= 0 {
+			matches = append(matches, rankedSession{session: s, group: 1, score: name.Score, exact: strings.EqualFold(normalizeSearch(s.Name, m.SeparatorAware), normalizeSearch(q, m.SeparatorAware))})
 		} else {
-			pathMatches = append(pathMatches, s)
+			path, _ := fuzzyMatch(s.Path, q, m.SeparatorAware, false)
+			if path.Start >= 0 {
+				matches = append(matches, rankedSession{session: s, group: 2, score: path.Score})
+			}
 		}
 	}
-	m.Filtered = append(m.Filtered, pathMatches...)
-	if len(homeMatches) > 0 {
-		m.Filtered = append(homeMatches, m.Filtered...)
+	sort.SliceStable(matches, func(i, j int) bool {
+		a, b := matches[i], matches[j]
+		if a.group != b.group {
+			return a.group < b.group
+		}
+		if a.exact != b.exact {
+			return a.exact
+		}
+		return a.score > b.score
+	})
+	for _, match := range matches {
+		m.Filtered = append(m.Filtered, match.session)
 	}
 	if queryChanged {
 		m.Selected = 0
@@ -86,14 +105,8 @@ func (m *Model) Current() (model.Session, bool) {
 	return m.Filtered[m.Selected], true
 }
 func Match(s, q string, sep bool) bool {
-	s = strings.ToLower(s)
-	q = strings.ToLower(q)
-	if sep {
-		repl := strings.NewReplacer("-", " ", "_", " ", "/", " ", ".", " ")
-		s = repl.Replace(s)
-		q = repl.Replace(q)
-	}
-	return strings.Contains(s, q)
+	result, _ := fuzzyMatch(s, q, sep, false)
+	return result.Start >= 0
 }
 func isHomePath(p string) bool {
 	if p == "" {

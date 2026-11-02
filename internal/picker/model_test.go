@@ -15,6 +15,47 @@ func TestFilterAndCurrent(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "api", cur.Name)
 }
+
+func TestFilterMatchesOrderedFragments(t *testing.T) {
+	m := New([]model.Session{{Name: "workspace launchpad"}, {Name: "unrelated"}})
+	m.Filter("worklaun")
+	require.Len(t, m.Filtered, 1)
+	assert.Equal(t, "workspace launchpad", m.Filtered[0].Name)
+	m.Filter("launwork")
+	assert.Empty(t, m.Filtered)
+}
+
+func TestFilterMatchesParentAndWorktreeName(t *testing.T) {
+	m := New([]model.Session{
+		{Name: "launchpad", WorkspaceID: "launchpad"},
+		{Name: "main", Path: "/trees/one", Worktree: model.WorktreeRelation{Linked: true, ParentWorkspaceName: "launchpad"}},
+		{Name: "main", Path: "/trees/two", Worktree: model.WorktreeRelation{Linked: true, ParentWorkspaceName: "other"}},
+	})
+	m.Filter("lamain")
+	require.Len(t, m.Filtered, 1)
+	assert.Equal(t, "/trees/one", m.Filtered[0].Path)
+}
+
+func TestFilterMatchesFragmentsAcrossPathComponents(t *testing.T) {
+	m := New([]model.Session{{Name: "launchpad", Path: "/work/launchpad"}})
+	m.Filter("worklaun")
+	require.Len(t, m.Filtered, 1)
+	assert.Equal(t, "launchpad", m.Filtered[0].Name)
+}
+
+func TestFilterRanksFuzzyMatchesAndPreservesTies(t *testing.T) {
+	m := New([]model.Session{
+		{Name: "a-project-i"}, {Name: "api-worker"}, {Name: "api"}, {Name: "api-server"},
+	})
+	m.Filter("api")
+	got := make([]string, 0, len(m.Filtered))
+	for _, s := range m.Filtered {
+		got = append(got, s.Name)
+	}
+	assert.Equal(t, []string{"api", "api-worker", "api-server", "a-project-i"}, got)
+	m.Filter("")
+	assert.Equal(t, m.All, m.Filtered)
+}
 func TestFilterDoesNotMutateSourceItems(t *testing.T) {
 	m := New([]model.Session{{Name: "api"}, {Name: "web"}})
 	m.Filter("web")
@@ -118,7 +159,9 @@ func TestFilterCanDisableHomePrioritization(t *testing.T) {
 
 	m.Filter("HOME")
 
-	want := []string{"home-tools", "home-manager", "path-before", "home-root", "path-after"}
+	// Without the home override, path matches rank by fuzzy score; the alias
+	// still includes the actual home directory even when its path doesn't match.
+	want := []string{"home-tools", "home-manager", "path-before", "path-after", "home-root"}
 	require.Len(t, m.Filtered, len(want))
 	for i, name := range want {
 		require.Equal(t, name, m.Filtered[i].Name)

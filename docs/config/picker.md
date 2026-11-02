@@ -38,8 +38,20 @@ applies to fzf. Picker sorting does not change JSON output.
 
 ### Search ranking
 
-Names and paths match case-insensitively; name matches precede path-only matches.
-Each group retains its existing order, including `workspace_sort` for Herdr rows.
+The native picker uses fzf's fuzzy matching algorithm, built into the plugin;
+the `fzf` executable is only needed for the experimental `--fzf` picker.
+Type characters in order, skipping any intervening characters: `worklaun`
+matches `workspace launchpad` or `/work/launchpad`.
+
+Searches match names and paths case-insensitively. Linked worktrees also match
+their parent workspace's name followed by their own: `lamain` finds `main`
+under `launchpad`. A parent-name search can also find its linked worktrees.
+Matching characters are highlighted in visible names and paths.
+
+Name matches, including parent/worktree matches, precede path-only matches.
+Exact names rank first within the name group, then results rank by fuzzy match
+quality. Ties retain the existing order, including `workspace_sort` for Herdr
+rows. An empty query preserves the existing order.
 An exact `home` query also finds the actual home directory regardless of its
 name: `prioritize_home = true` puts it first; `false` keeps it among path matches.
 The fzf picker uses its own ranking.
